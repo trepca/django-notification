@@ -13,6 +13,7 @@ from django.template import Context
 from django.template.loader import render_to_string
 
 from django.core.exceptions import ImproperlyConfigured
+from django.core.mail import EmailMultiAlternatives
 
 from django.contrib.sites.models import Site
 from django.contrib.auth.models import User
@@ -291,19 +292,27 @@ def send_now(users, label, extra_context=None, on_site=True):
 
         # Strip newlines from subject
         subject = ''.join(render_to_string('notification/email_subject.txt', {
-            'message': messages['short.txt'],
+                    'message': messages['short.txt'],
         }, context).splitlines())
 
-        body = render_to_string('notification/email_body.txt', {
+        text_body = render_to_string('notification/email_body.txt', {
             'message': messages['full.txt'],
         }, context)
-
-        notice = Notice.objects.create(user=user, message=messages['notice.html'],
-            notice_type=notice_type, on_site=on_site)
+        html_body = render_to_string('notification/email_body.txt', {
+            'message': messages['full.html'],
+        }, context)
+        notice = Notice.objects.create(user=user,
+                                       message=messages['notice.html'],
+                                       notice_type=notice_type,
+                                       on_site=on_site)
         if should_send(user, notice_type, "1") and user.email: # Email
             recipients.append(user.email)
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, recipients)
-
+        msg = EmailMultiAlternatives(subject,
+                                     text_body,
+                                     settings.DEFAULT_FROM_EMAIL,
+                                     recipients)
+        msg.attach_alternative(html_body, "text/html")
+        msg.send()
     # reset environment to original language
     activate(current_language)
 
